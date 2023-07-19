@@ -68,5 +68,5 @@ class Colony(object):
         return self.world.is_over_food(pos)
 
     def is_in_colony(self, pos):
-        print(f'{self.pos} - {pos} -> {np.sum((self.pos - pos) ** 2)}')
+        #print(f'{self.pos} - {pos} -> {np.sum((self.pos - pos) ** 2)}')
         return np.sum((self.pos - pos) ** 2) < self.radius ** 2

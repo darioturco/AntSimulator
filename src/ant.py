@@ -11,7 +11,7 @@ class Ant(object):
         self.drop_mark_count = 0
 
     def step(self):
-        self.pos += self.vel
+        self.pos += self.vel + self.vel_noise() + self.road_direction()
 
         if self.colony.is_out_of_bounds(self.pos):
             self.pos -= 2 * self.vel
@@ -32,7 +32,12 @@ class Ant(object):
                 self.with_food = True
                 self.vel = -self.vel
 
+    def vel_noise(self):
+        return np.random.normal(size=2) / 2
 
+    def road_direction(self):
+        ### Completar
+        return np.zeros(2)
 
     def render(self, color, draw_function):
         draw_function(color, self.pos, 1)

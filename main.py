@@ -14,4 +14,4 @@ if __name__ == '__main__':
     for t in range(10000):
         world.step()
         world.render()
-        time.sleep(0.001)
+        time.sleep(0.02)
