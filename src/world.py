@@ -6,7 +6,7 @@ green = (0, 255, 0)
 blue = (0, 0, 255)
 white = (255, 255, 255)
 colors = [red, green, blue, white]
-pos = [(100, 100), (300, 100), (100, 300), (300, 300)]
+pos = [(120, 120), (300, 100), (100, 300), (300, 300)]
 
 class World(object):
     def __init__(self, size, colonies, initial_population, food):
