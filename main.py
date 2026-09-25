@@ -1,17 +1,28 @@
-import time
-import numpy as np
+import pygame
+from src.menu import Menu
 from src.world import World
-from src.colony import Colony
 
-if __name__ == '__main__':
-    #blue = (0, 0, 255)
-    #colony = Colony((100, 100), blue, initial_population=10)
+def main():
+    setup = Menu().run()
+    if setup is None:
+        pygame.quit()
+        return
 
-    world_size = (200, 200)
-    initial_population = 25
-    world = World(world_size, 1, initial_population, {(i+14, j+6) for i in range(15) for j in range(15)})
+    world = World(setup.size, setup.colonies, setup.food, setup.obstacles)
+    clock = pygame.time.Clock()
 
-    for t in range(10000):
+    running = True
+    while running:
+        # Handling events every frame is what lets the window close with the X
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                running = False
+
         world.step()
         world.render()
-        time.sleep(0.025)
+        clock.tick(40)
+
+    pygame.quit()
+
+if __name__ == '__main__':
+    main()

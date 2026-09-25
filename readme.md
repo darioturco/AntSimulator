@@ -1,6 +1,6 @@
 # Ant Simulator #
 
-This project is a Python project that simulates the behavior of ants in a 2D space. In this simulation, ants navigate through the environment, searching for food and following a specific algorithm for pathfinding. The Ant pathfinding algorithms are often inspired by the foraging behavior of real ants, particularly their ability to find the shortest path between their nest and a food source. In this project I use the common algorithm called _Ant Colony Optimization (ACO) algorithm_. Here's a simplified explanation of how an ACO-based ant pathfinding algorithm work:
+This project is a Python project that simulates the behavior of ants in a 2D space. In this simulation, ants navigate through the environment, searching for food and following a specific algorithm for pathfinding. The Ant pathfinding algorithms are often inspired by the foraging behavior of real ants, particularly their ability to find the shortest path between their nest and a food source. In this project I use a simplified version of the _Ant Colony Optimization (ACO) algorithm_ (pheromone marks that fade over time, without per-path probabilities). Here's a simplified explanation of how an ACO-based ant pathfinding algorithm work:
 
 1. Initialization: Place a number of virtual ants in the environment. Each ant is positioned randomly. Assign a pheromone level to each edge (connection between two points) in the environment.
 
@@ -38,7 +38,20 @@ In order to install the project and run it localy on your machine, you can follo
 Finaly, to use the project just run the command:
 
 ```bash
-    python ./main.py    
+    python ./main.py
 ```
 
-That will open a pygame window with the simulation. In that simulation you'll have a red colony and a block of food(green). The some ants are going to walk in random directions leaving pheromones that can be seen with a transparent color. After some this the ants will find the food and then they are going to eat all the food.
+A menu opens first, where you set up the simulation:
+
+- **Width / height** of the world (50 to 2500 cells each).
+- **Number of colonies** (1 to 4: blue, red, yellow and white; 1 by default).
+- **Colony position**: choose *Colocar colonia*, pick the colony and click on the minimap.
+- **Food**: paint it or erase it on the minimap. The slider sets how much food each painted cell holds.
+- **Obstacles**: paint or erase gray cells. Ants cannot walk through them (nor place a colony under them).
+- **Pincel** slider sets the brush size. Keys 1-5 select the tool, Enter starts, Esc quits.
+
+Then a pygame window opens with the simulation (scaled to fit your screen if the world is big). Each colony has its own ants and its own pheromone marks: they wander randomly leaving marks, find the food, carry it back to their colony and the others follow the marks. The title of the window shows the ants alive per colony and the food left. Close it with the window's X or Esc.
+
+### Fights ###
+
+When two ants of different colonies get within 2 cells of each other they stop and fight: each step, each one hits the other with probability 0.5. An ant that receives 10 hits dies, and if it was carrying food it drops it where it died (another ant can pick it up).

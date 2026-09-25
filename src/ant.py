@@ -1,4 +1,3 @@
-import math
 import numpy as np
 
 class Ant(object):
@@ -16,7 +15,15 @@ class Ant(object):
         self.change_direction = 8
         self.change_direction_count = 0
 
+        self.hits = 0               # hits received from enemy ants
+        self.attacking = False      # set by the world when this ant is fighting this step
+
     def step(self):
+        if self.attacking:
+            # Busy fighting: no movement this step
+            self.attacking = False
+            return
+
         self.change_direction_count += 1
         if self.change_direction_count >= self.change_direction:
             self.change_direction_count = 0
@@ -24,11 +31,7 @@ class Ant(object):
             if np.linalg.norm(new_vel) > 0:
                 self.vel = new_vel
 
-        self.pos += self.vel + self.vel_noise()
-
-        if self.colony.is_out_of_bounds(self.pos):
-            self.pos -= 2 * self.vel
-            self.vel = -self.vel
+        self.move(self.vel + self.vel_noise())
 
         self.drop_mark_count += 1
         if self.drop_mark_count >= self.drop_mark:
@@ -45,6 +48,25 @@ class Ant(object):
                 self.with_food = True
                 self.vel = -self.vel
 
+    def move(self, step):
+        """Walk one step. Walls and obstacles are not crossed: the ant slides
+        along them (bouncing the blocked component of its velocity) or, if it
+        cannot move on either axis, turns around."""
+        new_pos = self.pos + step
+        if not self.colony.is_blocked(new_pos):
+            self.pos = new_pos
+            return
+
+        x_pos = self.pos + np.array([step[0], 0.0])
+        y_pos = self.pos + np.array([0.0, step[1]])
+        if not self.colony.is_blocked(x_pos):
+            self.pos = x_pos
+            self.vel = np.array([self.vel[0], -self.vel[1]])
+        elif not self.colony.is_blocked(y_pos):
+            self.pos = y_pos
+            self.vel = np.array([-self.vel[0], self.vel[1]])
+        else:
+            self.vel = -self.vel
 
     def vel_noise(self):
         if self.with_food:
@@ -59,4 +81,4 @@ class Ant(object):
             return self.colony.get_food_direction(self.pos)
 
     def render(self, color, draw_function):
-        draw_function(color, self.pos, 1)
+        draw_function(color, self.pos)
