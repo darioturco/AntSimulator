@@ -6,6 +6,8 @@ from src.colony import Colony
 MIN_SIZE = 50
 MAX_SIZE = 2500
 MAX_COLONIES = 4
+MIN_INITIAL_POPULATION = 1
+MAX_INITIAL_POPULATION = 200
 INITIAL_POPULATION = 25
 
 # Colonies, in order: blue, red, yellow, white
@@ -20,7 +22,7 @@ ATTACK_PROBABILITY = 0.5
 MAX_HITS = 10
 
 # What the menu hands over to the world
-Setup = namedtuple('Setup', ['size', 'colonies', 'food', 'obstacles'])
+Setup = namedtuple('Setup', ['size', 'colonies', 'food', 'obstacles', 'population'])
 
 
 def colony_radius(width, height):

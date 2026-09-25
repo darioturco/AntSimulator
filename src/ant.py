@@ -42,6 +42,7 @@ class Ant(object):
             # Check if the ant is in the colony
             if self.colony.is_in_colony(self.pos):
                 self.with_food = False
+                self.colony.deliver_food()
                 self.vel = -self.vel
         else:
             if self.colony.is_over_food(self.pos):

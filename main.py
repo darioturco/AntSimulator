@@ -8,7 +8,7 @@ def main():
         pygame.quit()
         return
 
-    world = World(setup.size, setup.colonies, setup.food, setup.obstacles)
+    world = World(setup.size, setup.colonies, setup.food, setup.obstacles, setup.population)
     clock = pygame.time.Clock()
 
     running = True

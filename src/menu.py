@@ -1,6 +1,6 @@
 import numpy as np
 import pygame
-from src.world import (Setup, colony_radius, food_color, MIN_SIZE, MAX_SIZE, MAX_COLONIES,
+from src.world import (Setup, colony_radius, food_color, MIN_SIZE, MAX_SIZE, MAX_COLONIES, MIN_INITIAL_POPULATION, MAX_INITIAL_POPULATION, INITIAL_POPULATION,
                        COLORS, COLOR_NAMES, OBSTACLE_COLOR, FOOD_SHOWN_MAX)
 
 WINDOW = (1060, 720)
@@ -32,7 +32,8 @@ class Menu(object):
 
         self.width = 200
         self.height = 200
-        self.texts = {'w': '200', 'h': '200'}
+        self.texts = {'w': '200', 'h': '200', 'p': str(INITIAL_POPULATION)}
+        self.population = INITIAL_POPULATION
         self.focus = None
         self.n_colonies = 1
         self.tool = TOOL_COLONY
@@ -51,11 +52,12 @@ class Menu(object):
         self.map_surface = None
 
         # Static layout of the left panel
-        self.field_rects = {'w': pygame.Rect(200, 64, 130, 30), 'h': pygame.Rect(200, 104, 130, 30)}
-        self.minus_rect = pygame.Rect(200, 154, 30, 30)
-        self.plus_rect = pygame.Rect(300, 154, 30, 30)
-        self.tool_rects = [pygame.Rect(20, 232 + i * 38, 310, 32) for i in range(len(TOOL_NAMES))]
-        self.colony_rects = [pygame.Rect(180 + i * 38, 427, 30, 28) for i in range(MAX_COLONIES)]
+        self.field_rects = {'w': pygame.Rect(200, 64, 130, 30), 'h': pygame.Rect(200, 104, 130, 30),
+                            'p': pygame.Rect(200, 144, 130, 30)}
+        self.minus_rect = pygame.Rect(200, 190, 30, 30)
+        self.plus_rect = pygame.Rect(300, 190, 30, 30)
+        self.tool_rects = [pygame.Rect(20, 250 + i * 34, 310, 30) for i in range(len(TOOL_NAMES))]
+        self.colony_rects = [pygame.Rect(180 + i * 38, 426, 30, 28) for i in range(MAX_COLONIES)]
         self.sliders = {'brush': (pygame.Rect(20, 496, 310, 10), 1, 40),
                         'amount': (pygame.Rect(20, 548, 310, 10), 1, FOOD_SHOWN_MAX)}
         self.clear_rect = pygame.Rect(20, 585, 310, 36)
@@ -150,6 +152,15 @@ class Menu(object):
         self.last_cell = cell
 
     def commit_field(self, key):
+        if key == 'p':
+            try:
+                value = int(self.texts[key])
+            except ValueError:
+                value = self.population
+            self.population = min(max(value, MIN_INITIAL_POPULATION), MAX_INITIAL_POPULATION)
+            self.texts[key] = str(self.population)
+            return
+
         try:
             value = int(self.texts[key])
         except ValueError:
@@ -188,7 +199,7 @@ class Menu(object):
         positions = [self.colony_pos(i) for i in range(self.n_colonies)]
         for i in range(self.n_colonies):
             self.clear_colony_zone(i)
-        return Setup((self.width, self.height), positions, self.food, self.obstacles)
+        return Setup((self.width, self.height), positions, self.food, self.obstacles, self.population)
 
     def on_mouse_down(self, pos):
         for key, rect in self.field_rects.items():
@@ -299,23 +310,24 @@ class Menu(object):
         self.label('Ant Simulator', (20, 18), self.big)
 
         # Size fields
-        for key, name in (('w', 'Ancho'), ('h', 'Alto')):
+        for key, name, lo, hi in (('w', 'Ancho', MIN_SIZE, MAX_SIZE), ('h', 'Alto', MIN_SIZE, MAX_SIZE),
+                                  ('p', 'Hormigas', MIN_INITIAL_POPULATION, MAX_INITIAL_POPULATION)):
             rect = self.field_rects[key]
-            self.label('%s (%d-%d)' % (name, MIN_SIZE, MAX_SIZE), (20, rect.y + 4))
+            self.label('%s (%d-%d)' % (name, lo, hi), (20, rect.y + 4))
             pygame.draw.rect(self.screen, (20, 22, 26), rect, border_radius=4)
             pygame.draw.rect(self.screen, ACCENT if self.focus == key else DIM, rect, 2, border_radius=4)
             caret = '|' if self.focus == key and pygame.time.get_ticks() // 500 % 2 == 0 else ''
             self.label(self.texts[key] + caret, (rect.x + 8, rect.y + 4))
 
         # Number of colonies
-        self.label('Colonias (1-%d)' % MAX_COLONIES, (20, 158))
+        self.label('Colonias (1-%d)' % MAX_COLONIES, (20, 194))
         for rect, sign in ((self.minus_rect, '-'), (self.plus_rect, '+')):
             pygame.draw.rect(self.screen, ACCENT, rect, border_radius=4)
             self.label(sign, (rect.x + 10, rect.y + 3))
-        self.label(str(self.n_colonies), (256, 158))
+        self.label(str(self.n_colonies), (256, 194))
 
         # Tools
-        self.label('Herramienta (teclas 1-5)', (20, 205), color=DIM)
+        self.label('Herramienta (teclas 1-5)', (20, 226), color=DIM)
         for i, rect in enumerate(self.tool_rects):
             pygame.draw.rect(self.screen, ACCENT if self.tool == i else (60, 64, 74), rect, border_radius=4)
             self.label('%d  %s' % (i + 1, TOOL_NAMES[i]), (rect.x + 10, rect.y + 5))

@@ -3,6 +3,9 @@ from src.ant import Ant
 
 render_marks = True
 
+FOOD_PER_NEW_ANT = 5    # every this many food units delivered, the colony gets a new ant
+MAX_POPULATION = 300
+
 class Colony(object):
     def __init__(self, world, pos, color, radius=20, initial_population=20, name=''):
         self.world = world
@@ -15,6 +18,7 @@ class Colony(object):
         self.food_marks = {}
         self.food_fade_mark_time = 500
         self.colony_fade_mark_time = 500
+        self.food_delivered = 0
 
         # create ants population (around the colony, never inside an obstacle)
         limit = np.array(world.size) - 1e-3
@@ -24,6 +28,12 @@ class Colony(object):
             if world.is_blocked(p):
                 p = np.array(self.pos, dtype=float)
             self.ants.append(Ant(self, p))
+
+    def deliver_food(self):
+        """An ant brought food home: every FOOD_PER_NEW_ANT units the colony grows."""
+        self.food_delivered += 1
+        if self.food_delivered % FOOD_PER_NEW_ANT == 0 and len(self.ants) < MAX_POPULATION:
+            self.ants.append(Ant(self, np.array(self.pos, dtype=float)))
 
     def step(self):
         for a in self.ants:

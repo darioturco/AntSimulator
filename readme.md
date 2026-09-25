@@ -41,9 +41,16 @@ Finaly, to use the project just run the command:
     python ./main.py
 ```
 
+Tests (they run without opening any window):
+
+```bash
+    python -m unittest discover -s tests
+```
+
 A menu opens first, where you set up the simulation:
 
 - **Width / height** of the world (50 to 2500 cells each).
+- **Ants per colony** at the start (1 to 200; 25 by default).
 - **Number of colonies** (1 to 4: blue, red, yellow and white; 1 by default).
 - **Colony position**: choose *Colocar colonia*, pick the colony and click on the minimap.
 - **Food**: paint it or erase it on the minimap. The slider sets how much food each painted cell holds.
@@ -51,6 +58,10 @@ A menu opens first, where you set up the simulation:
 - **Pincel** slider sets the brush size. Keys 1-5 select the tool, Enter starts, Esc quits.
 
 Then a pygame window opens with the simulation (scaled to fit your screen if the world is big). Each colony has its own ants and its own pheromone marks: they wander randomly leaving marks, find the food, carry it back to their colony and the others follow the marks. The title of the window shows the ants alive per colony and the food left. Close it with the window's X or Esc.
+
+### Growth ###
+
+Every 5 units of food an ant brings home, the colony gets a new ant (up to 300 per colony). Food is not regenerated, so the map you paint is all the food there is.
 
 ### Fights ###
 
