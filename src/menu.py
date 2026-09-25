@@ -5,7 +5,9 @@ from src.world import (Setup, colony_radius, food_color, MIN_SIZE, MAX_SIZE, MAX
                        COLORS, COLOR_NAMES, OBSTACLE_COLOR, FOOD_SHOWN_MAX)
 
 WINDOW = (1060, 720)
-EXAMPLE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'examples', 'ejemplo.npz')
+MAPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'maps')
+EXAMPLE_PATH = os.path.join(MAPS_DIR, 'ejemplo.npz')
+FIELD_ORDER = ['w', 'h', 'p']  # text boxes, in Tab order
 MAP_RECT = pygame.Rect(370, 20, 670, 680)
 
 BG = (24, 26, 30)
@@ -20,6 +22,23 @@ TOOL_NAMES = ['Colocar colonia', 'Pintar comida', 'Borrar comida', 'Pintar obsta
 
 # Colony positions as a fraction of the world, so they survive a resize
 DEFAULT_COLONIES = [(0.6, 0.6), (0.85, 0.15), (0.15, 0.85), (0.85, 0.85)]
+
+
+def pick_file(save):
+    """Native open/save dialog. Returns the chosen path, or '' if cancelled."""
+    import tkinter
+    from tkinter import filedialog
+    os.makedirs(MAPS_DIR, exist_ok=True)
+    root = tkinter.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    try:
+        options = {'initialdir': MAPS_DIR, 'filetypes': [('Mapa de Ant Simulator', '*.npz')]}
+        if save:
+            return filedialog.asksaveasfilename(title='Exportar mapa', defaultextension='.npz', **options)
+        return filedialog.askopenfilename(title='Importar mapa', **options)
+    finally:
+        root.destroy()
 
 
 class Menu(object):
@@ -52,6 +71,7 @@ class Menu(object):
         self.last_cell = None
         self.map_dirty = True
         self.map_surface = None
+        self.pick_file = pick_file
 
         # Static layout of the left panel
         self.field_rects = {'w': pygame.Rect(200, 64, 130, 30), 'h': pygame.Rect(200, 104, 130, 30),
@@ -62,10 +82,12 @@ class Menu(object):
         self.colony_rects = [pygame.Rect(180 + i * 38, 426, 30, 28) for i in range(MAX_COLONIES)]
         self.sliders = {'brush': (pygame.Rect(20, 496, 310, 10), 1, 40),
                         'amount': (pygame.Rect(20, 548, 310, 10), 1, FOOD_SHOWN_MAX)}
-        self.clear_rect = pygame.Rect(20, 585, 150, 36)
-        self.example_rect = pygame.Rect(180, 585, 150, 36)
+        self.import_rect = pygame.Rect(20, 570, 150, 30)
+        self.export_rect = pygame.Rect(180, 570, 150, 30)
+        self.clear_rect = pygame.Rect(20, 606, 150, 30)
+        self.example_rect = pygame.Rect(180, 606, 150, 30)
         self.message = ''
-        self.start_rect = pygame.Rect(20, 632, 310, 50)
+        self.start_rect = pygame.Rect(20, 644, 310, 42)
 
     # ---- World geometry ----
 
@@ -216,8 +238,38 @@ class Menu(object):
         try:
             self.load_scenario(EXAMPLE_PATH)
             self.message = 'Ejemplo cargado: toca INICIAR'
-        except (OSError, ValueError, KeyError) as e:
+        except Exception as e:
             self.message = 'No se pudo cargar el ejemplo (%s)' % e
+
+    def import_map(self):
+        try:
+            path = self.pick_file(False)
+        except Exception as e:
+            self.message = 'No se pudo abrir el dialogo (%s)' % e
+            return
+        if not path:
+            return
+        try:
+            self.load_scenario(path)
+            self.message = 'Mapa importado: ' + os.path.basename(path)
+        except Exception as e:
+            self.message = 'No se pudo importar (%s)' % e
+
+    def export_map(self):
+        try:
+            path = self.pick_file(True)
+        except Exception as e:
+            self.message = 'No se pudo abrir el dialogo (%s)' % e
+            return
+        if not path:
+            return
+        if not path.lower().endswith('.npz'):
+            path += '.npz'
+        try:
+            self.save_scenario(path)
+            self.message = 'Mapa exportado: ' + os.path.basename(path)
+        except Exception as e:
+            self.message = 'No se pudo exportar (%s)' % e
 
     def set_focus(self, key):
         if self.focus is not None and self.focus != key:
@@ -255,6 +307,10 @@ class Menu(object):
             self.map_dirty = True
         elif self.example_rect.collidepoint(pos):
             self.load_example()
+        elif self.import_rect.collidepoint(pos):
+            self.import_map()
+        elif self.export_rect.collidepoint(pos):
+            self.export_map()
         elif self.clear_rect.collidepoint(pos):
             self.food[:] = 0
             self.obstacles[:] = False
@@ -281,8 +337,17 @@ class Menu(object):
         return None
 
     def on_key(self, event):
+        if event.key == pygame.K_TAB:
+            # Tab moves to the next text box (Shift+Tab to the previous one)
+            step = -1 if getattr(event, 'mod', 0) & pygame.KMOD_SHIFT else 1
+            if self.focus is None:
+                self.set_focus(FIELD_ORDER[-1 if step < 0 else 0])
+            else:
+                self.set_focus(FIELD_ORDER[(FIELD_ORDER.index(self.focus) + step) % len(FIELD_ORDER)])
+            return None
+
         if self.focus is not None:
-            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB, pygame.K_ESCAPE):
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_ESCAPE):
                 self.commit_field(self.focus)
                 self.focus = None
             elif event.key == pygame.K_BACKSPACE:
@@ -390,12 +455,15 @@ class Menu(object):
 
         # Buttons
         pygame.draw.rect(self.screen, (90, 60, 60), self.clear_rect, border_radius=6)
-        self.label('Limpiar mapa', (self.clear_rect.x + 26, self.clear_rect.y + 6))
+        self.label('Limpiar mapa', (self.clear_rect.x + 26, self.clear_rect.y + 4))
         pygame.draw.rect(self.screen, (60, 90, 130), self.example_rect, border_radius=6)
-        self.label('Cargar ejemplo', (self.example_rect.x + 18, self.example_rect.y + 6))
+        self.label('Cargar ejemplo', (self.example_rect.x + 18, self.example_rect.y + 4))
+        for rect, text in ((self.import_rect, 'Importar mapa'), (self.export_rect, 'Exportar mapa')):
+            pygame.draw.rect(self.screen, (60, 90, 130), rect, border_radius=6)
+            self.label(text, (rect.x + 22, rect.y + 4))
         pygame.draw.rect(self.screen, GREEN, self.start_rect, border_radius=8)
-        self.label('INICIAR', (self.start_rect.x + 115, self.start_rect.y + 11), self.font)
-        self.label(self.message or 'Enter: iniciar   Esc: salir', (20, 690), self.small, DIM)
+        self.label('INICIAR', (self.start_rect.x + 115, self.start_rect.y + 8), self.font)
+        self.label(self.message or 'Tab: siguiente caja   Enter: iniciar   Esc: salir', (20, 690), self.small, DIM)
 
         self.draw_map()
         pygame.display.flip()

@@ -11,7 +11,8 @@ import pygame
 
 from src.ant import Ant
 from src.colony import FOOD_PER_NEW_ANT
-from src.menu import Menu
+from src.marks import MarkField
+from src.menu import Menu, EXAMPLE_PATH
 from src.world import World, MAX_HITS, MIN_SIZE, MAX_SIZE
 
 
@@ -70,6 +71,19 @@ class FightTests(unittest.TestCase):
         for _ in range(100):
             world._combat()
         self.assertEqual((a.hits, b.hits), (0, 0))
+
+    def test_prefilter_only_keeps_ants_with_an_enemy_nearby(self):
+        world = make_world([(20, 20), (80, 80), (50, 10)])
+        near_a = Ant(world.colonies[0], np.array([50.0, 50.0]))
+        near_b = Ant(world.colonies[1], np.array([51.5, 50.5]))
+        alone = Ant(world.colonies[2], np.array([10.0, 10.0]))
+        friend = Ant(world.colonies[0], np.array([50.2, 50.2]))   # same colony as near_a, but near_b is close to it too
+        world.colonies[0].ants = [near_a, friend]
+        world.colonies[1].ants = [near_b]
+        world.colonies[2].ants = [alone]
+        ants = [near_a, friend, near_b, alone]
+        kept = world._ants_near_an_enemy([c for c in world.colonies if c.ants], ants)
+        self.assertEqual(kept, [near_a, friend, near_b])
 
     def test_far_ants_do_not_fight(self):
         world = make_world([(20, 20), (80, 80)])
@@ -279,6 +293,143 @@ class MenuTests(unittest.TestCase):
         pygame.event.clear()
         pygame.event.post(pygame.event.Event(pygame.QUIT))
         self.assertIsNone(self.menu.run())
+
+
+class MenuNavigationAndFilesTests(unittest.TestCase):
+    def setUp(self):
+        self.menu = Menu()
+
+    def test_tab_moves_through_the_text_boxes(self):
+        m = self.menu
+        m.on_key(key(pygame.K_TAB))
+        self.assertEqual(m.focus, 'w')
+        m.on_key(key(pygame.K_TAB))
+        self.assertEqual(m.focus, 'h')
+        m.on_key(key(pygame.K_TAB))
+        self.assertEqual(m.focus, 'p')
+        m.on_key(key(pygame.K_TAB))
+        self.assertEqual(m.focus, 'w')  # wraps around
+
+    def test_shift_tab_goes_backwards(self):
+        m = self.menu
+        shift = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB, unicode='', mod=pygame.KMOD_SHIFT)
+        m.on_key(shift)
+        self.assertEqual(m.focus, 'p')
+        m.on_key(shift)
+        self.assertEqual(m.focus, 'h')
+
+    def test_tab_commits_the_box_it_leaves(self):
+        m = self.menu
+        m.on_mouse_down(m.field_rects['w'].center)
+        for _ in range(6):
+            m.on_key(key(pygame.K_BACKSPACE))
+        for ch in '9999':
+            m.on_key(key(ord(ch), ch))
+        m.on_key(key(pygame.K_TAB))
+        self.assertEqual(m.focus, 'h')
+        self.assertEqual(m.width, MAX_SIZE)
+
+    def test_example_is_a_file_in_the_maps_folder(self):
+        self.assertTrue(os.path.isfile(EXAMPLE_PATH))
+        self.assertEqual(os.path.basename(os.path.dirname(EXAMPLE_PATH)), 'maps')
+
+    def test_export_then_import_a_map(self):
+        import tempfile
+        path = os.path.join(tempfile.mkdtemp(), 'mio')  # no extension: it is added
+        m = self.menu
+        m.food[7, 7] = 4
+        m.pick_file = lambda save: path
+        m.on_mouse_down(m.export_rect.center)
+        self.assertIn('exportado', m.message)
+        self.assertTrue(os.path.isfile(path + '.npz'))
+
+        other = Menu()
+        other.pick_file = lambda save: path + '.npz'
+        other.on_mouse_down(other.import_rect.center)
+        self.assertIn('importado', other.message)
+        self.assertEqual(other.food[7, 7], 4)
+
+    def test_cancelled_dialog_changes_nothing(self):
+        m = self.menu
+        m.pick_file = lambda save: ''
+        before = m.food.copy()
+        m.on_mouse_down(m.import_rect.center)
+        m.on_mouse_down(m.export_rect.center)
+        self.assertEqual(m.message, '')
+        self.assertTrue((m.food == before).all())
+
+    def test_importing_a_bad_file_shows_a_message(self):
+        import tempfile
+        bad = os.path.join(tempfile.mkdtemp(), 'roto.npz')
+        with open(bad, 'w') as f:
+            f.write('esto no es un mapa')
+        m = self.menu
+        m.pick_file = lambda save: bad
+        m.on_mouse_down(m.import_rect.center)
+        self.assertIn('No se pudo importar', m.message)
+        self.assertEqual(m.width, 200)
+
+    def test_dialog_failure_shows_a_message(self):
+        def broken(save):
+            raise RuntimeError('sin pantalla')
+        self.menu.pick_file = broken
+        self.menu.on_mouse_down(self.menu.import_rect.center)
+        self.assertIn('No se pudo abrir el dialogo', self.menu.message)
+
+
+class FastForwardTests(unittest.TestCase):
+    def test_fast_forward_runs_steps_without_drawing(self):
+        np.random.seed(0)
+        world = make_world([(30, 30), (70, 70)], population=10)
+        world.render = lambda: self.fail('fast forward must not draw')
+        done = world.fast_forward(0.05)
+        self.assertGreaterEqual(done, 1)
+        self.assertEqual(world.steps, done)
+
+    def test_fast_forward_gives_the_same_result_as_stepping(self):
+        # Same number of steps, same seed: the simulation itself is identical
+        np.random.seed(4)
+        a = make_world([(30, 30), (70, 70)], population=10)
+        for _ in range(200):
+            a.step()
+        np.random.seed(4)
+        b = make_world([(30, 30), (70, 70)], population=10)
+        done = 0
+        while done < 200:
+            done += b.fast_forward(0.0)
+        self.assertEqual(a.steps, b.steps)
+        self.assertEqual([len(c.ants) for c in a.colonies], [len(c.ants) for c in b.colonies])
+
+
+class MarkFieldTests(unittest.TestCase):
+    def test_marks_expire(self):
+        marks = MarkField()
+        marks.add(5, 5, expiry=100)
+        self.assertEqual(marks.count(99), 1)
+        self.assertEqual(marks.count(100), 0)
+        self.assertIsNone(marks.oldest_offset(5, 5, 10, now=100))
+
+    def test_oldest_mark_wins_inside_the_window_only(self):
+        marks = MarkField()
+        marks.add(12, 5, expiry=300)   # newer
+        marks.add(7, 8, expiry=200)    # older, nearby
+        marks.add(90, 90, expiry=1)    # oldest of all, but far away
+        self.assertEqual(marks.oldest_offset(10, 5, 10, now=0), (-3, 3))
+        self.assertIsNone(marks.oldest_offset(50, 50, 10, now=0))
+
+    def test_window_bounds_match_the_original(self):
+        marks = MarkField()
+        marks.add(0, 0, expiry=10)
+        self.assertEqual(marks.oldest_offset(10, 0, 10, now=0), (-10, 0))   # dx = -r is inside
+        self.assertIsNone(marks.oldest_offset(-10, 0, 10, now=0))           # dx = +r is outside
+
+    def test_prune_drops_only_expired_marks(self):
+        marks = MarkField()
+        marks.add(1, 1, expiry=5)
+        marks.add(200, 200, expiry=50)
+        marks.prune(now=10)
+        self.assertEqual(sum(len(b) for b in marks.buckets.values()), 1)
+        self.assertEqual(len(marks.positions(now=10)), 1)
 
 
 if __name__ == '__main__':

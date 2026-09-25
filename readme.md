@@ -55,10 +55,14 @@ A menu opens first, where you set up the simulation:
 - **Colony position**: choose *Colocar colonia*, pick the colony and click on the minimap.
 - **Food**: paint it or erase it on the minimap. The slider sets how much food each painted cell holds.
 - **Obstacles**: paint or erase gray cells. Ants cannot walk through them (nor place a colony under them).
-- **Cargar ejemplo** button: loads `examples/ejemplo.npz` (3 colonies, two walls with gaps and a block of food in the middle). Then press INICIAR.
+- **Importar mapa / Exportar mapa** buttons: open a file dialog to load or save the whole setup (size, colonies, food, obstacles, ants per colony) as a `.npz` file. Maps live in the `maps/` folder.
+- **Cargar ejemplo** button: loads `maps/ejemplo.npz` (3 colonies, two walls with gaps and a block of food in the middle). Then press INICIAR.
+- **Tab** moves to the next text box (Shift+Tab to the previous one).
 - **Pincel** slider sets the brush size. Keys 1-5 select the tool, Enter starts, Esc quits.
 
 Then a pygame window opens with the simulation (scaled to fit your screen if the world is big). Each colony has its own ants and its own pheromone marks: they wander randomly leaving marks, find the food, carry it back to their colony and the others follow the marks. The title of the window shows the ants alive per colony and the food left. Close it with the window's X or Esc.
+
+**Fast forward:** hold **Tab** while the simulation runs. It does as many steps as it can without drawing (the window is refreshed once per second and the title says AVANCE RAPIDO), so big worlds and long waits go much faster. Release Tab to watch again.
 
 ### Growth ###
 
