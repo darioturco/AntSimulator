@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import pygame
 from collections import namedtuple
@@ -44,6 +45,7 @@ class World(object):
         self.obstacles = obstacles.copy()
         self.food_total = int(self.food.sum())
         self.steps = 0
+        self.fast_mode = False  # only changes the window title
 
         radius = colony_radius(*size)
         self.colonies = []
@@ -59,6 +61,8 @@ class World(object):
         self.scale = min(fit, max(1.0, 500 / max(self.width, self.height)))
         self.window_size = (max(1, round(self.width * self.scale)), max(1, round(self.height * self.scale)))
         self.window = pygame.display.set_mode(self.window_size)
+        size = max(1, min(3, round(self.scale)))  # ants and marks: a small blob of 1-3 pixels
+        self.blob = [(dx, dy) for dx in range(-size, size + 1) for dy in range(-size, size + 1) if dx * dx + dy * dy <= size * size]
 
         self.background = self._build_background()
         self.scaled_background = None
@@ -122,45 +126,92 @@ class World(object):
         if self.steps % 20 == 0:
             self._update_caption()
 
+    def fast_forward(self, budget):
+        """Advance the simulation without drawing anything for `budget` seconds.
+        Returns how many steps were done (at least one)."""
+        start = time.perf_counter()
+        done = 0
+        while True:
+            self.step()
+            done += 1
+            if time.perf_counter() - start >= budget:
+                return done
+
     def _combat(self):
         """Ants of different colonies within ATTACK_RANGE stop and trade blows: each
         one hits the other with probability ATTACK_PROBABILITY per step. After
         MAX_HITS hits an ant dies and drops the food it was carrying."""
+        colonies = [c for c in self.colonies if c.ants]
+        if len(colonies) < 2:
+            return
+        ants = [a for c in colonies for a in c.ants]
+        candidates = self._ants_near_an_enemy(colonies, ants)
+        if not candidates:
+            return
+
+        # Only ants with an enemy close by are worth checking (enemies are candidates too)
         cell = ATTACK_RANGE
         grid = {}
-        for c in self.colonies:
-            for a in c.ants:
-                grid.setdefault((int(a.pos[0] // cell), int(a.pos[1] // cell)), []).append(a)
+        for a in candidates:
+            grid.setdefault((int(a.pos[0] // cell), int(a.pos[1] // cell)), []).append(a)
 
-        for c in self.colonies:
-            for a in c.ants:
-                gx, gy = int(a.pos[0] // cell), int(a.pos[1] // cell)
-                enemy = None
-                for i in (gx - 1, gx, gx + 1):
-                    for j in (gy - 1, gy, gy + 1):
-                        for b in grid.get((i, j), ()):
-                            if b.colony is not a.colony and np.sum((a.pos - b.pos) ** 2) <= ATTACK_RANGE ** 2:
-                                enemy = b
-                                break
-                        if enemy is not None:
+        hit = False
+        for a in candidates:
+            gx, gy = int(a.pos[0] // cell), int(a.pos[1] // cell)
+            enemy = None
+            for i in (gx - 1, gx, gx + 1):
+                for j in (gy - 1, gy, gy + 1):
+                    for b in grid.get((i, j), ()):
+                        if b.colony is not a.colony and np.sum((a.pos - b.pos) ** 2) <= ATTACK_RANGE ** 2:
+                            enemy = b
                             break
                     if enemy is not None:
                         break
-
                 if enemy is not None:
-                    a.attacking = True  # fighting: does not move this step
-                    if np.random.random() < ATTACK_PROBABILITY:
-                        enemy.hits += 1
+                    break
 
-        for c in self.colonies:
-            for a in c.ants:
-                if a.hits >= MAX_HITS and a.with_food:
-                    self.add_food(a.pos, 1)
-            c.ants = [a for a in c.ants if a.hits < MAX_HITS]
+            if enemy is not None:
+                a.attacking = True  # fighting: does not move this step
+                if np.random.random() < ATTACK_PROBABILITY:
+                    enemy.hits += 1
+                    hit = True
+
+        if hit:
+            for c in self.colonies:
+                for a in c.ants:
+                    if a.hits >= MAX_HITS and a.with_food:
+                        self.add_food(a.pos, 1)
+                c.ants = [a for a in c.ants if a.hits < MAX_HITS]
+
+    def _ants_near_an_enemy(self, colonies, ants):
+        """Ants (in the original order) that have an ant of another colony in their
+        3x3 block of ATTACK_RANGE-sized cells. Done with numpy so the (many) ants
+        that are alone cost almost nothing."""
+        pos = np.array([a.pos for a in ants])
+        colony_bit = np.repeat(1 << np.arange(len(colonies), dtype=np.int64), [len(c.ants) for c in colonies])
+        span = 1 << 20
+        cx = (pos[:, 0] // ATTACK_RANGE).astype(np.int64) + 1
+        cy = (pos[:, 1] // ATTACK_RANGE).astype(np.int64) + 1
+        key = cx * span + cy
+
+        order = np.argsort(key, kind='stable')
+        cells, first = np.unique(key[order], return_index=True)
+        colonies_in_cell = np.bitwise_or.reduceat(colony_bit[order], first)
+
+        nearby = np.zeros(len(ants), dtype=np.int64)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                wanted = key + dx * span + dy
+                where = np.minimum(np.searchsorted(cells, wanted), len(cells) - 1)
+                nearby |= np.where(cells[where] == wanted, colonies_in_cell[where], 0)
+
+        return [ants[i] for i in np.nonzero(nearby & ~colony_bit)[0]]
 
     def _update_caption(self):
         parts = ['%s: %d' % (c.name, len(c.ants)) for c in self.colonies]
-        pygame.display.set_caption('Ants - ' + ' | '.join(parts) + ' | comida: %d' % self.food_total)
+        title = 'Ants - ' + ' | '.join(parts) + ' | comida: %d' % self.food_total
+        title += ' | AVANCE RAPIDO' if self.fast_mode else ' | mantener Tab: avance rapido'
+        pygame.display.set_caption(title)
 
     # ---- Rendering ----
 
@@ -170,9 +221,20 @@ class World(object):
     def draw_circle(self, color, pos, radius):
         pygame.draw.circle(self.window, color, self._screen_pos(pos), max(1, round(radius * self.scale)))
 
-    def draw_small(self, color, pos):
-        """Ants and pheromone marks: about 1 world unit, at most 3 pixels."""
-        pygame.draw.circle(self.window, color, self._screen_pos(pos), max(1, min(3, round(self.scale))))
+    def plot_points(self, color, points):
+        """Ants and pheromone marks: all the points of one colour at once, written
+        straight into the window's pixels (one call per point is far too slow)."""
+        if len(points) == 0:
+            return
+        px = (points[:, 0] * self.scale).astype(int)
+        py = (points[:, 1] * self.scale).astype(int)
+        width, height = self.window_size
+        pixels = pygame.surfarray.pixels3d(self.window)
+        for dx, dy in self.blob:
+            x, y = px + dx, py + dy
+            inside = (x >= 0) & (x < width) & (y >= 0) & (y < height)
+            pixels[x[inside], y[inside]] = color
+        del pixels  # release the surface lock before drawing anything else
 
     def render(self):
         # Downscaled worlds are expensive to rescale, so do it at most every few frames
@@ -187,6 +249,6 @@ class World(object):
 
         self.window.blit(self.scaled_background, (0, 0))
         for c in self.colonies:
-            c.render(self.draw_circle, self.draw_small)
+            c.render(self.draw_circle, self.plot_points)
 
         pygame.display.update()

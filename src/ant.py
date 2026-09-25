@@ -80,6 +80,3 @@ class Ant(object):
             return self.colony.get_colony_direction(self.pos)
         else:
             return self.colony.get_food_direction(self.pos)
-
-    def render(self, color, draw_function):
-        draw_function(color, self.pos)

@@ -1,10 +1,12 @@
 import numpy as np
 from src.ant import Ant
+from src.marks import MarkField
 
 render_marks = True
 
 FOOD_PER_NEW_ANT = 5    # every this many food units delivered, the colony gets a new ant
 MAX_POPULATION = 300
+PRUNE_EVERY = 50        # expired marks are ignored at once and dropped from memory this often
 
 class Colony(object):
     def __init__(self, world, pos, color, radius=20, initial_population=20, name=''):
@@ -14,8 +16,8 @@ class Colony(object):
         self.name = name
         self.population = initial_population
         self.radius = radius
-        self.no_food_marks = {}
-        self.food_marks = {}
+        self.no_food_marks = MarkField()
+        self.food_marks = MarkField()
         self.food_fade_mark_time = 500
         self.colony_fade_mark_time = 500
         self.food_delivered = 0
@@ -39,31 +41,23 @@ class Colony(object):
         for a in self.ants:
             a.step()
 
-        for v in list(self.food_marks.keys()):
-            self.food_marks[v] -= 1
-            if self.food_marks[v] <= 0:
-                del self.food_marks[v]
+        if self.world.steps % PRUNE_EVERY == 0:
+            self.food_marks.prune(self.world.steps)
+            self.no_food_marks.prune(self.world.steps)
 
-        for v in list(self.no_food_marks.keys()):
-            self.no_food_marks[v] -= 1
-            if self.no_food_marks[v] <= 0:
-                del self.no_food_marks[v]
-
-    def render(self, draw_circle, draw_small):
+    def render(self, draw_circle, plot_points):
         # Render the colony
         draw_circle(self.color, self.pos, self.radius)
 
         # Render all marks
+        now = self.world.steps
         if render_marks:
-            for m in self.no_food_marks:
-                draw_small(self.clear_color(4), m)
-
-            for m in self.food_marks:
-                draw_small(self.clear_color(2), m)
+            plot_points(self.clear_color(4), self.no_food_marks.positions(now))
+            plot_points(self.clear_color(2), self.food_marks.positions(now))
 
         # Render all ants
-        for a in self.ants:
-            a.render(self.color, draw_small)
+        if self.ants:
+            plot_points(self.color, np.array([a.pos for a in self.ants]))
 
     def clear_color(self, factor):
         return (self.color[0] // factor, self.color[1] // factor, self.color[2] // factor)
@@ -72,11 +66,11 @@ class Colony(object):
         return self.world.is_blocked(pos)
 
     def add_mark(self, with_food, pos):
-        pos = pos.astype('int')
+        x, y = int(pos[0]), int(pos[1])
         if with_food:
-            self.food_marks[tuple(pos)] = self.food_fade_mark_time
+            self.food_marks.add(x, y, self.world.steps + self.food_fade_mark_time)
         else:
-            self.no_food_marks[tuple(pos)] = self.colony_fade_mark_time
+            self.no_food_marks.add(x, y, self.world.steps + self.colony_fade_mark_time)
 
     def is_over_food(self, pos):
         return self.world.is_over_food(pos)
@@ -84,28 +78,15 @@ class Colony(object):
     def is_in_colony(self, pos):
         return np.sum((self.pos - pos) ** 2) < self.radius ** 2
 
-    def oldest_mark_offset(self, marks, pos, r):
-        """Offset to the mark closest to expiring within a (2r x 2r) window, or None."""
-        px, py = int(pos[0]), int(pos[1])
-        best = None
-        best_time = float('inf')
-        for (mx, my), time_left in marks.items():
-            dx, dy = mx - px, my - py
-            if -r <= dx < r and -r <= dy < r and time_left < best_time:
-                best_time = time_left
-                best = (dx, dy)
-
-        return best
-
     def get_food_direction(self, pos):
-        best = self.oldest_mark_offset(self.food_marks, pos, 10)
+        best = self.food_marks.oldest_offset(int(pos[0]), int(pos[1]), 10, self.world.steps)
         return np.zeros(2) if best is None else self.normalize(best)
 
     def get_colony_direction(self, pos):
         if np.sum((self.pos - pos) ** 2) < (self.radius ** 2) * 100:
             return self.normalize((self.pos[0] - pos[0], self.pos[1] - pos[1]))
 
-        best = self.oldest_mark_offset(self.no_food_marks, pos, 50)
+        best = self.no_food_marks.oldest_offset(int(pos[0]), int(pos[1]), 50, self.world.steps)
         return np.zeros(2) if best is None else self.normalize(best)
 
     def normalize(self, direction):
