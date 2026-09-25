@@ -235,6 +235,46 @@ class MenuTests(unittest.TestCase):
         for x, y in setup.colonies:
             self.assertTrue(0 <= x < setup.size[0] and 0 <= y < setup.size[1])
 
+    def test_example_button_loads_a_playable_scenario(self):
+        self.menu.on_mouse_down(self.menu.example_rect.center)
+        self.assertIn('Ejemplo cargado', self.menu.message)
+        setup = self.menu.start()
+        self.assertEqual(len(setup.colonies), 3)
+        self.assertGreater(int(setup.food.sum()), 0)
+        self.assertGreater(int(setup.obstacles.sum()), 0)
+        world = World(setup.size, setup.colonies, setup.food, setup.obstacles, setup.population)
+        for _ in range(100):
+            world.step()
+            world.render()
+
+    def test_scenario_round_trip(self):
+        import tempfile
+        self.menu.food[5, 5] = 9
+        self.menu.obstacles[6, 6] = True
+        self.menu.population = 33
+        path = os.path.join(tempfile.mkdtemp(), 'escenario.npz')
+        self.menu.save_scenario(path)
+        other = Menu()
+        other.load_scenario(path)
+        self.assertEqual((other.width, other.height, other.population), (200, 200, 33))
+        self.assertEqual(other.food[5, 5], 9)
+        self.assertTrue(other.obstacles[6, 6])
+
+    def test_missing_scenario_shows_a_message_instead_of_crashing(self):
+        self.menu.message = ''
+        try:
+            self.menu.load_scenario('no_existe.npz')
+        except OSError:
+            pass
+        import src.menu as menu_module
+        original = menu_module.EXAMPLE_PATH
+        menu_module.EXAMPLE_PATH = 'no_existe.npz'
+        try:
+            self.menu.load_example()
+        finally:
+            menu_module.EXAMPLE_PATH = original
+        self.assertIn('No se pudo cargar', self.menu.message)
+
     def test_closing_the_menu_returns_none(self):
         pygame.event.clear()
         pygame.event.post(pygame.event.Event(pygame.QUIT))

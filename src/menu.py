@@ -1,9 +1,11 @@
+import os
 import numpy as np
 import pygame
 from src.world import (Setup, colony_radius, food_color, MIN_SIZE, MAX_SIZE, MAX_COLONIES, MIN_INITIAL_POPULATION, MAX_INITIAL_POPULATION, INITIAL_POPULATION,
                        COLORS, COLOR_NAMES, OBSTACLE_COLOR, FOOD_SHOWN_MAX)
 
 WINDOW = (1060, 720)
+EXAMPLE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'examples', 'ejemplo.npz')
 MAP_RECT = pygame.Rect(370, 20, 670, 680)
 
 BG = (24, 26, 30)
@@ -60,7 +62,9 @@ class Menu(object):
         self.colony_rects = [pygame.Rect(180 + i * 38, 426, 30, 28) for i in range(MAX_COLONIES)]
         self.sliders = {'brush': (pygame.Rect(20, 496, 310, 10), 1, 40),
                         'amount': (pygame.Rect(20, 548, 310, 10), 1, FOOD_SHOWN_MAX)}
-        self.clear_rect = pygame.Rect(20, 585, 310, 36)
+        self.clear_rect = pygame.Rect(20, 585, 150, 36)
+        self.example_rect = pygame.Rect(180, 585, 150, 36)
+        self.message = ''
         self.start_rect = pygame.Rect(20, 632, 310, 50)
 
     # ---- World geometry ----
@@ -182,6 +186,39 @@ class Menu(object):
                 self.clear_colony_zone(i)
             self.map_dirty = True
 
+    # ---- Saving / loading a scenario ----
+
+    def save_scenario(self, path):
+        np.savez_compressed(path, size=[self.width, self.height], n_colonies=self.n_colonies,
+                            colony_frac=np.array(self.colony_frac), population=self.population,
+                            food=self.food, obstacles=self.obstacles)
+
+    def load_scenario(self, path):
+        with np.load(path) as data:
+            width, height = (int(v) for v in data['size'])
+            if not (MIN_SIZE <= width <= MAX_SIZE and MIN_SIZE <= height <= MAX_SIZE):
+                raise ValueError('tamano fuera de rango')
+            food = data['food'].astype(np.uint16)
+            obstacles = data['obstacles'].astype(bool)
+            if food.shape != (width, height) or obstacles.shape != (width, height):
+                raise ValueError('mapa con tamano inconsistente')
+            self.width, self.height = width, height
+            self.food, self.obstacles = food, obstacles
+            self.n_colonies = min(max(int(data['n_colonies']), 1), MAX_COLONIES)
+            self.colony_frac = [tuple(float(v) for v in f) for f in data['colony_frac']]
+            self.population = min(max(int(data['population']), MIN_INITIAL_POPULATION), MAX_INITIAL_POPULATION)
+        self.texts = {'w': str(self.width), 'h': str(self.height), 'p': str(self.population)}
+        self.selected = 0
+        self.focus = None
+        self.map_dirty = True
+
+    def load_example(self):
+        try:
+            self.load_scenario(EXAMPLE_PATH)
+            self.message = 'Ejemplo cargado: toca INICIAR'
+        except (OSError, ValueError, KeyError) as e:
+            self.message = 'No se pudo cargar el ejemplo (%s)' % e
+
     def set_focus(self, key):
         if self.focus is not None and self.focus != key:
             self.commit_field(self.focus)
@@ -216,6 +253,8 @@ class Menu(object):
             self.n_colonies = min(MAX_COLONIES, self.n_colonies + 1)
             self.clear_colony_zone(self.n_colonies - 1)
             self.map_dirty = True
+        elif self.example_rect.collidepoint(pos):
+            self.load_example()
         elif self.clear_rect.collidepoint(pos):
             self.food[:] = 0
             self.obstacles[:] = False
@@ -351,10 +390,12 @@ class Menu(object):
 
         # Buttons
         pygame.draw.rect(self.screen, (90, 60, 60), self.clear_rect, border_radius=6)
-        self.label('Limpiar mapa', (self.clear_rect.x + 100, self.clear_rect.y + 6))
+        self.label('Limpiar mapa', (self.clear_rect.x + 26, self.clear_rect.y + 6))
+        pygame.draw.rect(self.screen, (60, 90, 130), self.example_rect, border_radius=6)
+        self.label('Cargar ejemplo', (self.example_rect.x + 18, self.example_rect.y + 6))
         pygame.draw.rect(self.screen, GREEN, self.start_rect, border_radius=8)
         self.label('INICIAR', (self.start_rect.x + 115, self.start_rect.y + 11), self.font)
-        self.label('Enter: iniciar   Esc: salir', (20, 690), self.small, DIM)
+        self.label(self.message or 'Enter: iniciar   Esc: salir', (20, 690), self.small, DIM)
 
         self.draw_map()
         pygame.display.flip()
