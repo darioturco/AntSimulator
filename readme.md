@@ -14,6 +14,41 @@ This project is a Python project that simulates the behavior of ants in a 2D spa
 
 1. Path Selection: After a sufficient number of iterations, the paths with higher pheromone levels are more likely to be selected by the ants, representing the shortest paths.
 
+## Features ##
+
+- **Setup menu** on start: world size (50-2500 per side), 1-4 colonies (blue, red, yellow, white) placed on a minimap, ants per colony, paintable food (with an amount per cell) and paintable gray obstacles. Tab moves between the text boxes.
+- **Import / export of maps** (`.npz` files in `maps/`), plus a ready-made example (`maps/ejemplo.npz`).
+- **Several colonies at once**, each one with its own ants and its own pheromone trails.
+- **Obstacles and walls**: ants slide along them instead of crossing them.
+- **Fights**: ants of different colonies fight to the death (10 hits), and a dead ant drops the food it carried.
+- **Growth**: a colony gets a new ant for every 5 units of food it receives.
+- **Fast forward**: hold Tab during the simulation to advance many steps without drawing.
+- **Big worlds**: up to 2500x2500 cells, shown scaled to fit the screen.
+- **Clean exit**: the window closes with the X or Esc.
+- **Tests**: 38 unit tests that run without opening any window.
+
+A recorded game of the example map is in [`examples/partida_ejemplo.gif`](examples/partida_ejemplo.gif) (menu screenshot: `examples/menu_ejemplo.png`).
+
+### Project layout ###
+
+```
+main.py            menu -> simulation loop (Tab = fast forward)
+src/menu.py        setup menu, minimap, painting, import/export of maps
+src/world.py       world: food, obstacles, fights, drawing, fast forward
+src/colony.py      colony: its ants, growth and pheromone marks
+src/ant.py         one ant: movement, food, obstacles
+src/marks.py       pheromone marks with expiry and spatial buckets
+maps/              map files (ejemplo.npz)
+examples/          recorded game and menu screenshot
+tests/             unit tests
+```
+
+### Implementation notes ###
+
+Big worlds used to freeze because every pheromone mark was drawn with its own pygame call and every step walked over all the marks. Now the marks store the step at which they expire (nothing is decremented), they are grouped in 10x10 buckets so an ant only looks at the marks near it, and marks and ants are drawn all at once with numpy. Fights first filter with numpy the ants that have an enemy close, which gives the same results as checking every ant. In the worst case tested (2500x2500, 4 colonies of 200 ants, about 40000 marks) a step went from about 25 ms to 5 ms and a frame from about 150 ms to 10-25 ms.
+
+Not included on purpose: food is never regenerated (the map you paint is all the food there is), and there are no command line options (the menu covers them).
+
 ## Installation ##
 
 In order to install the project and run it localy on your machine, you can follow this simple steps:
@@ -32,6 +67,8 @@ In order to install the project and run it localy on your machine, you can follo
     ```bash
     pip install -r requirements.txt
     ```
+
+    (`numpy` and `pygame`; the import/export dialogs use `tkinter`, which comes with Python.)
 
 ## Usage ##
 
